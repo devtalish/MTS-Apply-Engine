@@ -20,51 +20,136 @@ log = logging.getLogger(__name__)
 
 # ── Scoring Prompt ────────────────────────────────────────────────────────
 
-SCORE_PROMPT_TEMPLATE = """You are a job fit evaluator. Given a candidate's resume and a job description, score how well the candidate fits the role.
+SCORE_PROMPT_TEMPLATE = """You are the job-fit scoring engine for Muhammad Talish.
 
-THE CANDIDATE: {candidate_summary}
+Candidate context:
+{candidate_summary}
 
-⚠️ GEOGRAPHY CHECK — DO THIS FIRST, BEFORE ANYTHING ELSE:
-The candidate is US-based (Seattle, WA). Any role restricted to non-US geography is INELIGIBLE.
-Read the FULL description for buried sentences like "This role will be remote and based in the UK"
-or "Remote — Ontario, BC or Alberta". A perfect tech stack on a non-US role is still INELIGIBLE.
+The candidate is based in Pakistan and is seeking legitimate remote technical employment. Target compensation is approximately USD $1,000–$2,000+ per month, but do not reject a job solely because salary is undisclosed.
 
-Output ELIGIBILITY: non_us_only when the role's hiring location is restricted to a non-US country
-even if the role is remote. Output ELIGIBILITY: eligible when the role is open to US workers
-(US-only, US-remote, global-remote, or no restriction).
+PRIMARY TARGET ROLES:
+- Software Engineer / Software Developer
+- Backend Engineer / Backend Developer
+- Full-Stack Engineer / Full-Stack Developer
+- Python Engineer / Python Developer
+- AI Engineer / Applied AI Engineer
+- AI/Automation Engineer / Automation Engineer
+- API / Integration Engineer
+- Platform / Cloud / DevOps Engineer
+- QA Automation Engineer
+- Technical Developer / Implementation Engineer
 
-Common signals for non_us_only:
-- "based in (UK|Canada|Ireland|Germany|...)"
-- "Remote — (UK|Canada|Europe|EMEA|APAC)"
-- "(m/f/d)" / "(m/w/d)" German title suffix
-- UK/Canada right-to-work questions in the form
-- CET / GMT+N / IST timezone requirement
+CORE SKILLS TO MATCH WHEN PRESENT IN THE RESUME:
+Python, JavaScript, TypeScript, React, Next.js, FastAPI, Flask, APIs, REST, AI/LLM integrations, automation, browser/workflow automation, backend systems, Supabase, PostgreSQL, Git, Docker, cloud deployment, software architecture, full-stack development, AI-assisted development.
 
-If non_us_only, you MAY still produce a SCORE based on tech-stack fit (for audit), but the
-eligibility tag is what determines whether the application proceeds.
+==================================================
+1. PAKISTAN / REMOTE ELIGIBILITY
+==================================================
+Determine whether the actual worker location requirement permits someone working from Pakistan.
 
-SCORING CRITERIA:
-- 10: Near-perfect IC engineering match. The role is a software/platform/infrastructure engineer position requiring the candidate's exact stack (Go/Kotlin/Python/Java, distributed systems, K8s). Seniority aligns (Senior/Staff/Principal). The candidate would be a top-tier applicant with minimal gaps.
-- 9: Excellent engineering match. Strong alignment on tech stack and seniority, with 1-2 gaps in secondary skills or slightly different domain.
-- 7-8: Good engineering match. Candidate has most required technical skills. Minor gaps in specific frameworks or domain experience, easily bridged.
-- 5-6: Moderate match. The role is engineering but uses a different primary stack, or there's a seniority mismatch (e.g., junior role or executive-only role with no IC component).
-- 3-4: Weak match. Engineering role but wrong specialization (frontend-only, mobile, ML research, data science), or a non-engineering role with some technical overlap.
-- 1-2: Poor match. Non-engineering role (recruiting, design, marketing, product management, sales), completely different field, OR non-US geographic restriction.
+ELIGIBLE examples:
+- Remote / Worldwide / Global remote / Work from anywhere
+- Remote with no country restriction
+- Remote and explicitly open to Pakistan
+- Remote across multiple countries including Pakistan
 
-ADDITIONAL RULES:
-- Non-engineering roles (recruiters, designers, PMs, marketing, sales, executive search) score 1-2 MAX regardless of seniority or domain.
-- Roles requiring a specific language the candidate doesn't know (Rust, C++, Ruby, Scala, Clojure) as the PRIMARY requirement score 4-6 max depending on transferability.
-- "CTO" or "VP Engineering" roles that are purely management with no IC engineering component score 5-6 max.
-- LOCATION is N/A: check the description for any office/city requirement. If the description implies onsite in a specific US city outside Seattle/Bellevue/Kirkland/Redmond, cap at 7.
-- Distinguish REQUIRED skills from NICE-TO-HAVE. Only penalize for missing required skills.
-- Value transferable experience: workflow orchestration, distributed systems, microservices, developer platforms transfer across domains.
+INELIGIBLE examples:
+- US-only when US work authorization or US physical presence is required
+- Canada-only
+- UK-only
+- EU-only / Europe-only
+- India-only
+- Any other country/region restriction that clearly excludes Pakistan
+- Required citizenship, residency, or work authorization that the candidate does not have
+- Onsite/hybrid in another country with no genuine remote option
 
-You MUST include all four lines below. Do not skip REASONING.
+Do NOT reject a job simply because the employer is American, Canadian, British, European, etc.
+Do NOT assume that a timezone mention alone excludes Pakistan. Only treat timezone as a hard issue when the posting clearly requires working from a location/timezone incompatible with the candidate's circumstances.
+If the description is ambiguous, explain the uncertainty rather than inventing a restriction.
 
+Output ELIGIBILITY: non_us_only for a clear geographic/work-authorization restriction that excludes Pakistan. Otherwise output ELIGIBILITY: eligible.
+
+==================================================
+2. ROLE FIT
+==================================================
+Judge the actual responsibilities, not just the title. Technical roles should be prioritized.
+
+Strong matches include software/backend/full-stack/AI/automation/API/integration/platform/cloud/DevOps engineering.
+
+Usually reject or score very low:
+- Sales / marketing / recruiting / HR
+- Pure customer support / customer success
+- Data entry / virtual assistant / microtasks
+- Commission-only work
+- Unpaid work
+- Pay-to-work schemes
+- Pure non-technical design roles
+
+Solutions/implementation/technical customer-facing roles may still be considered when the actual work is substantially technical.
+
+==================================================
+3. TECHNICAL FIT
+==================================================
+Compare REQUIRED qualifications against the actual resume.
+
+- Required skills matter more than nice-to-have skills.
+- Give credit for transferable engineering skills rather than demanding an exact framework match.
+- Do not invent experience with a technology that is absent from the resume.
+- Projects and practical builds count as evidence of technical ability, but must not be converted into fake employment history.
+- Highly specialized fields such as embedded hardware, semiconductor engineering, medical research, advanced quantitative finance, or specialized security clearance should score lower unless directly supported by the resume.
+
+==================================================
+4. EXPERIENCE / SENIORITY
+==================================================
+Use the resume's actual experience level. Do not assume the candidate is Senior/Staff/Principal.
+
+Junior and mid-level roles are valid targets when the technical requirements fit.
+
+If a posting explicitly requires 7+ years, 10+ years, Staff/Principal leadership, or another level not supported by the resume, reduce the score substantially.
+Do not penalize the candidate merely for being young.
+Do not fabricate years of experience.
+
+==================================================
+5. COMPENSATION
+==================================================
+Target is approximately USD $1,000–$2,000+ per month.
+
+- Prefer legitimate salaried or normal professional contract compensation that can realistically meet the target.
+- If salary is undisclosed, do not automatically reject; mark it as unknown in reasoning.
+- Reject unpaid, pay-to-work, commission-only, or obviously deceptive compensation.
+- Never invent a salary figure.
+
+==================================================
+6. LEGITIMACY / RISK
+==================================================
+Look for requests for money, training fees, crypto payments, equipment purchases, unrealistic income promises, pyramid/MLM structures, or an unidentifiable employer.
+A normal legitimate employer with an undisclosed salary is not automatically suspicious.
+
+==================================================
+7. LEARNING VALUE
+==================================================
+Learning value is secondary to actual fit. AI, automation, backend, cloud, APIs, architecture, and modern engineering workflows are useful positives, but learning potential must never rescue a fundamentally bad-fit job.
+
+==================================================
+SCORING
+==================================================
+10 = Exceptional fit with strong technical alignment, realistic seniority, Pakistan-compatible location, and minimal gaps.
+8-9 = Strong fit and realistic application opportunity with manageable gaps.
+7 = Reasonable fit with noticeable but potentially manageable gaps.
+5-6 = Partial fit with important gaps.
+3-4 = Weak fit or major mismatch.
+1-2 = Clearly unsuitable, non-technical, ineligible geographically, unpaid/commission-only, or otherwise unacceptable.
+
+Never inflate a score because the title contains AI, Software, Engineer, or Developer. Judge the actual description.
+
+OUTPUT EXACTLY THESE FOUR LINES:
 ELIGIBILITY: [eligible|non_us_only]
 SCORE: [1-10]
 KEYWORDS: [comma-separated ATS keywords from the job description that match or could match the candidate]
-REASONING: [2-3 sentences explaining the score, what matched well, and any gaps. If non_us_only, name the country/region.]"""
+REASONING: [2-4 concise sentences covering role fit, technical fit, seniority, Pakistan/remote eligibility, compensation if known, and important gaps]
+
+Never invent facts not present in the resume, profile, or job description.
+"""
 
 
 # ── Rule-based pre-filter (catches obvious ineligible before LLM call) ─────
@@ -78,48 +163,25 @@ REASONING: [2-3 sentences explaining the score, what matched well, and any gaps.
 # Checked against title + location field only (not full description, to avoid
 # false positives from US companies mentioning global offices).
 _INELIGIBLE_TITLE_PATTERNS = re.compile(
-    # Explicit non-US regions in title
-    r'\bEMEA\b'
-    r'|\bAPAC\b'
-    r'|\bLATAM\b'
-    r'|\bMENA\b'
-    r'|\bTOLA\b'                    # sales region: Texas/Oklahoma/Louisiana/Arkansas
-    r'|\bANZ\b'                     # Australia/New Zealand
-    r'|\bNordics\b'
-    r'|\bEU[- ]only\b'
-    r'|\bUK[- ]only\b'
+    # Clear non-Pakistan geographic restrictions in the title.
+    r'\bUK[- ]only\b'
+    r'|\bUnited Kingdom[- ]only\b'
+    r'|\bCanada[- ]only\b'
+    r'|\bUS[- ]only\b'
+    r'|\bUSA[- ]only\b'
     r'|\bEurope[- ]only\b'
-    r'|\(m/[fw]/d\)'                # German job title suffix (m/f/d) or (m/w/d)
-    r'|\bm/[fw]/d\b'
-    r'|\bOnly hiring in\b'
-    # Seniority mismatches (user is Senior/Staff/Principal level)
-    r'|\bJunior\b'
+    r'|\bEU[- ]only\b'
+    r'|\bIndia[- ]only\b'
+    # Obvious non-target job noise.
     r'|\bIntern(ship)?\b'
-    r'|\bFresher\b'
-    r'|\bEntry[- ]?Level\b'
-    r'|\bNew[- ]Grad\b'
-    r'|\bTrainee\b'
-    r'|\bApprentice\b'
-    # Sales-adjacency (not IC engineering)
-    r'|\bSales Engineer\b'
-    r'|\bSolutions Engineer\b'
-    r'|\bPre[- ]?[Ss]ales\b'
-    r'|\bCustomer Success Engineer\b'
-    # Retail / warehouse / service roles (filter out Costco + similar noise)
     r'|\bCashier\b|\bBaker\b|\bCake Decorator\b|\bButcher\b|\bMeat Cutter\b'
     r'|\bGas Station Attendant\b|\bPharmacy Technician\b|\bHearing Aid Dispenser\b'
     r'|\bStocker\b|\bForklift\b|\bWarehouse Associate\b|\bTruck Driver\b'
-    r'|\bBakery Clerk\b|\bDeli Clerk\b|\bProduce Clerk\b|\bMember Service\b'
-    r'|\bOptician\b|\bOptical\b'
-    # More seniority — "Graduate Developer"/"Graduate Software Engineer" patterns
-    # Protected: "Graduate School", "Graduate Student" (those don't appear in job titles)
-    r'|\bGraduate\b'
-    # Non-engineering roles
-    r'|\bRecruiter\b'
-    r'|\bTalent Acquisition\b|\bTalent Scout\b|\bTalent Sourcer\b'
+    r'|\bBakery Clerk\b|\bDeli Clerk\b|\bProduce Clerk\b'
+    r'|\bOptician\b'
+    r'|\bRecruiter\b|\bTalent Acquisition\b|\bTalent Scout\b|\bTalent Sourcer\b'
     r'|\bAccount Manager\b|\bAccount Executive\b'
     r'|\bUX Designer\b|\bUI Designer\b|\bProduct Designer\b|\bGraphic Designer\b'
-    # Specialist IC roles outside the target stack (mobile, legacy enterprise)
     r'|\bAndroid Engineer\b|\biOS Engineer\b|\bMobile Engineer\b'
     r'|\bSalesforce Developer\b|\bApex Developer\b'
     r'|\bMainframe Engineer\b|\bCOBOL Developer\b|\bTIBCO\b',
@@ -143,7 +205,7 @@ _INELIGIBLE_LOCATION_PATTERNS = re.compile(
     # Asia
     r'|\bIndia\b|\bSingapore\b|\bJapan\b|\bVietnam\b|\bThailand\b'
     r'|\bPhilippines\b|\bIndonesia\b|\bKorea\b|\bTaiwan\b|\bHong Kong\b'
-    r'|\bChina\b|\bPakistan\b|\bBangladesh\b|\bMalaysia\b'
+    r'|\bChina\b|\bBangladesh\b|\bMalaysia\b'
     # Latin America
     r'|\bBrazil\b|\bBrasil\b|\bMexico\b|\bMéxico\b|\bArgentina\b'
     r'|\bChile\b|\bColombia\b|\bPeru\b|\bUruguay\b'
@@ -171,11 +233,7 @@ _INELIGIBLE_DESC_PATTERNS = re.compile(
     r'|Ontario,\s*British\s+Columbia'
     # UK/Canada right-to-work questions on the form (often mirrored in JD)
     r"|right\s+to\s+work\s+in\s+(the\s+)?(UK|United\s+Kingdom|Canada|Ireland|EU|European\s+Union)"
-    r"|requires?\s+(the\s+)?right\s+to\s+work\s+in\s+(the\s+)?(UK|United\s+Kingdom|Canada|Ireland|EU)"
-    # Timezone restrictions
-    r'|CET\s+timezone'
-    r'|GMT[+\-]\d+\s+timezone'
-    r'|IST\s+timezone',
+    r"|requires?\s+(the\s+)?right\s+to\s+work\s+in\s+(the\s+)?(UK|United\s+Kingdom|Canada|Ireland|EU)",
     re.IGNORECASE,
 )
 
@@ -254,14 +312,12 @@ def _build_candidate_summary(profile: dict) -> str:
     years = exp.get("years_of_experience_total", "several")
     current_title = exp.get("current_job_title", "Software Engineer")
     target = exp.get("target_role", "Software Engineer")
-    languages = boundary.get("languages", [])
-    platforms = boundary.get("platforms", [])
     parts = [f"{current_title} with {years} years experience."]
-    if languages:
-        parts.append(f"Primary stack: {', '.join(languages[:8])}.")
-    if platforms:
-        parts.append(f"Platforms: {', '.join(platforms[:6])}.")
+    for category, skills in boundary.items():
+        if isinstance(skills, list) and skills:
+            parts.append(f"{category}: {', '.join(str(x) for x in skills[:12])}.")
     parts.append(f"Targets: {target}.")
+    parts.append("Location: Pakistan; target arrangement: remote.")
     return " ".join(parts)
 
 
@@ -287,7 +343,7 @@ def score_job(resume_text: str, job: dict, profile: dict | None = None) -> dict:
         return {
             "score": 2,
             "keywords": "",
-            "reasoning": f"Ineligible: {ineligible_reason}. Candidate is US-based.",
+            "reasoning": f"Ineligible: {ineligible_reason}. Candidate is based in Pakistan.",
             "eligibility": "non_us_only",
         }
 
