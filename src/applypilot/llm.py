@@ -2,10 +2,13 @@
 Unified LLM client for ApplyPilot.
 
 Auto-detects provider from environment:
-  GEMINI_API_KEY    -> Google Gemini (primary)
-  OPENAI_API_KEY    -> OpenAI (fallback)
-  ANTHROPIC_API_KEY -> Anthropic (fallback)
-  LLM_URL           -> Local llama.cpp / Ollama compatible endpoint
+  GEMINI_API_KEY      -> Google Gemini (primary)
+  OPENROUTER_API_KEY  -> OpenRouter (free-router fallback)
+  GROQ_API_KEY        -> Groq (fast fallback)
+  DEEPSEEK_API_KEY    -> DeepSeek (fallback)
+  OPENAI_API_KEY      -> OpenAI (fallback)
+  ANTHROPIC_API_KEY   -> Anthropic (fallback)
+  LLM_URL             -> Local llama.cpp / Ollama compatible endpoint
 
 LLM_MODEL env var overrides the default (fast) model for any provider.
 LLM_MODEL_QUALITY env var sets a higher-quality model for critical steps
@@ -33,95 +36,84 @@ log = logging.getLogger(__name__)
 class ModelEntry:
     """A model with everything needed to call it."""
     name: str
-    provider: str           # "gemini", "openai", "anthropic", "local"
+    provider: str           # "gemini", "openrouter", "groq", "deepseek", "openai", "anthropic", "local"
     base_url: str
     api_key: str
 
 
 def _build_fallback_chain(primary_model: str, quality: bool = False) -> list[ModelEntry]:
-    """Build a cross-provider fallback chain starting from the primary model.
+    """Build an automatic multi-provider fallback chain.
 
-    Gemini models come first (free tier), then OpenAI (cheap), then Anthropic.
-    Only includes providers whose API keys are configured.
+    Provider order is intentionally free/low-cost first, then paid fallbacks:
+    Gemini -> Groq -> OpenRouter -> DeepSeek -> OpenAI -> Anthropic.
+    Providers are included only when their API key exists.
     """
     gemini_key = os.environ.get("GEMINI_API_KEY", "")
+    openrouter_key = os.environ.get("OPENROUTER_API_KEY", "")
+    groq_key = os.environ.get("GROQ_API_KEY", "")
+    deepseek_key = os.environ.get("DEEPSEEK_API_KEY", "")
     openai_key = os.environ.get("OPENAI_API_KEY", "")
     anthropic_key = os.environ.get("ANTHROPIC_API_KEY", "")
-    deepseek_key = os.environ.get("DEEPSEEK_API_KEY", "")
+
     gemini_url = "https://generativelanguage.googleapis.com/v1beta/openai"
+    openrouter_url = "https://openrouter.ai/api/v1"
+    groq_url = "https://api.groq.com/openai/v1"
+    deepseek_url = "https://api.deepseek.com/v1"
     openai_url = "https://api.openai.com/v1"
     anthropic_url = "https://api.anthropic.com"
-    deepseek_url = "https://api.deepseek.com/v1"
 
-    # Gemini chains — use verified model IDs only
-    if quality:
-        gemini_models = [
-            "gemini-2.5-pro",
-            "gemini-2.5-flash",
-            "gemini-2.0-flash",
-        ]
-    else:
-        gemini_models = [
-            "gemini-2.5-flash",
-            "gemini-2.0-flash",
-            "gemini-2.0-flash-lite",
-        ]
+    gemini_models = (
+        ["gemini-2.5-flash", "gemini-2.5-flash-lite"]
+        if quality
+        else ["gemini-2.5-flash-lite", "gemini-2.5-flash"]
+    )
 
-    # OpenAI fallbacks (cost-efficient)
-    if quality:
-        openai_models = ["gpt-4.1-mini", "gpt-4.1-nano"]
-    else:
-        openai_models = ["gpt-4.1-nano", "gpt-4.1-mini"]
+    openrouter_default = os.environ.get("OPENROUTER_MODEL_QUALITY" if quality else "OPENROUTER_MODEL", "openrouter/free")
+    groq_default = os.environ.get("GROQ_MODEL_QUALITY" if quality else "GROQ_MODEL", "openai/gpt-oss-120b" if quality else "openai/gpt-oss-20b")
+    deepseek_default = os.environ.get("DEEPSEEK_MODEL", "deepseek-chat")
 
-    # Anthropic fallbacks (cost-efficient)
-    if quality:
-        anthropic_models = ["claude-sonnet-4-5-20250514", "claude-haiku-4-5-20251001"]
-    else:
-        anthropic_models = ["claude-haiku-4-5-20251001"]
+    openai_models = ["gpt-4.1-mini", "gpt-4.1-nano"] if quality else ["gpt-4.1-nano", "gpt-4.1-mini"]
+    anthropic_models = ["claude-sonnet-4-5-20250514", "claude-haiku-4-5-20251001"] if quality else ["claude-haiku-4-5-20251001"]
 
     chain: list[ModelEntry] = []
 
-    # Start from the primary model in the Gemini chain
-    if gemini_key:
-        started = False
-        for m in gemini_models:
-            if m == primary_model:
-                started = True
-            if started:
-                chain.append(ModelEntry(m, "gemini", gemini_url, gemini_key))
-        # If primary wasn't found in chain, add full chain
-        if not started:
-            chain.append(ModelEntry(primary_model, "gemini", gemini_url, gemini_key))
-            for m in gemini_models:
-                if m != primary_model:
-                    chain.append(ModelEntry(m, "gemini", gemini_url, gemini_key))
+    def add(provider: str, url: str, key: str, models: list[str]) -> None:
+        if not key:
+            return
+        for model in models:
+            chain.append(ModelEntry(model, provider, url, key))
 
-    # DeepSeek fallbacks (cheap, OpenAI-compatible)
-    if quality:
-        deepseek_models = ["deepseek-chat"]
-    else:
-        deepseek_models = ["deepseek-chat"]
+    # If a primary model is explicitly configured, put that provider/model first.
+    primary_candidates = [
+        ("gemini", gemini_url, gemini_key, gemini_models),
+        ("openrouter", openrouter_url, openrouter_key, [openrouter_default]),
+        ("groq", groq_url, groq_key, [groq_default]),
+        ("deepseek", deepseek_url, deepseek_key, [deepseek_default]),
+        ("openai", openai_url, openai_key, openai_models),
+    ]
 
-    # OpenAI fallbacks
-    if openai_key:
-        for m in openai_models:
-            chain.append(ModelEntry(m, "openai", openai_url, openai_key))
+    primary_entry: ModelEntry | None = None
+    if primary_model:
+        for provider, url, key, models in primary_candidates:
+            if key and primary_model in models:
+                primary_entry = ModelEntry(primary_model, provider, url, key)
+                break
 
-    # DeepSeek fallbacks
-    if deepseek_key:
-        for m in deepseek_models:
-            chain.append(ModelEntry(m, "deepseek", deepseek_url, deepseek_key))
+    if primary_entry:
+        chain.append(primary_entry)
 
-    # Anthropic fallbacks
-    if anthropic_key:
-        for m in anthropic_models:
-            chain.append(ModelEntry(m, "anthropic", anthropic_url, anthropic_key))
+    # Then use the stable provider order.
+    add("gemini", gemini_url, gemini_key, [m for m in gemini_models if not primary_entry or m != primary_entry.name])
+    add("groq", groq_url, groq_key, [groq_default])
+    add("openrouter", openrouter_url, openrouter_key, [openrouter_default])
+    add("deepseek", deepseek_url, deepseek_key, [deepseek_default])
+    add("openai", openai_url, openai_key, openai_models)
+    add("anthropic", anthropic_url, anthropic_key, anthropic_models)
 
-    # If nothing was added (no keys), raise
     if not chain:
         raise RuntimeError(
-            "No LLM provider configured. "
-            "Set GEMINI_API_KEY, OPENAI_API_KEY, DEEPSEEK_API_KEY, or ANTHROPIC_API_KEY."
+            "No LLM provider configured. Set GEMINI_API_KEY, OPENROUTER_API_KEY, "
+            "GROQ_API_KEY, DEEPSEEK_API_KEY, OPENAI_API_KEY, ANTHROPIC_API_KEY, or LLM_URL."
         )
 
     return chain
@@ -132,40 +124,32 @@ def _build_fallback_chain(primary_model: str, quality: bool = False) -> list[Mod
 # ---------------------------------------------------------------------------
 
 def _detect_provider(quality: bool = False) -> tuple[str, str, str]:
-    """Return (base_url, model, api_key) for the primary provider."""
+    """Return (base_url, model, api_key) for the primary configured provider."""
     gemini_key = os.environ.get("GEMINI_API_KEY", "")
+    openrouter_key = os.environ.get("OPENROUTER_API_KEY", "")
+    groq_key = os.environ.get("GROQ_API_KEY", "")
+    deepseek_key = os.environ.get("DEEPSEEK_API_KEY", "")
     openai_key = os.environ.get("OPENAI_API_KEY", "")
     local_url = os.environ.get("LLM_URL", "")
 
     model_override = os.environ.get("LLM_MODEL", "")
     quality_model = os.environ.get("LLM_MODEL_QUALITY", "")
 
-    if quality and quality_model:
-        chosen_model = quality_model
-    else:
-        chosen_model = model_override
-
-    if gemini_key and not local_url:
-        return (
-            "https://generativelanguage.googleapis.com/v1beta/openai",
-            chosen_model or "gemini-2.5-flash",
-            gemini_key,
-        )
-    if openai_key and not local_url:
-        return (
-            "https://api.openai.com/v1",
-            chosen_model or "gpt-4.1-nano",
-            openai_key,
-        )
     if local_url:
-        return (
-            local_url.rstrip("/"),
-            chosen_model or "local-model",
-            os.environ.get("LLM_API_KEY", ""),
-        )
+        return (local_url.rstrip("/"), quality_model or model_override or "local-model", os.environ.get("LLM_API_KEY", ""))
+    if gemini_key:
+        return ("https://generativelanguage.googleapis.com/v1beta/openai", quality_model or model_override or "gemini-2.5-flash", gemini_key)
+    if groq_key:
+        return ("https://api.groq.com/openai/v1", quality_model or model_override or os.environ.get("GROQ_MODEL", "openai/gpt-oss-20b"), groq_key)
+    if openrouter_key:
+        return ("https://openrouter.ai/api/v1", quality_model or model_override or os.environ.get("OPENROUTER_MODEL", "openrouter/free"), openrouter_key)
+    if deepseek_key:
+        return ("https://api.deepseek.com/v1", quality_model or model_override or os.environ.get("DEEPSEEK_MODEL", "deepseek-chat"), deepseek_key)
+    if openai_key:
+        return ("https://api.openai.com/v1", quality_model or model_override or "gpt-4.1-nano", openai_key)
     raise RuntimeError(
-        "No LLM provider configured. "
-        "Set GEMINI_API_KEY, OPENAI_API_KEY, or LLM_URL."
+        "No LLM provider configured. Set GEMINI_API_KEY, OPENROUTER_API_KEY, "
+        "GROQ_API_KEY, DEEPSEEK_API_KEY, OPENAI_API_KEY, or LLM_URL."
     )
 
 
@@ -247,6 +231,9 @@ class LLMClient:
             "Content-Type": "application/json",
             "Authorization": f"Bearer {entry.api_key}",
         }
+        if entry.provider == "openrouter":
+            headers["HTTP-Referer"] = os.environ.get("OPENROUTER_HTTP_REFERER", "https://github.com/ibarrajo/ApplyPilot")
+            headers["X-Title"] = os.environ.get("OPENROUTER_APP_TITLE", "ApplyPilot")
         # DeepSeek deepseek-chat has an 8192 max output token limit
         if entry.provider == "deepseek":
             max_tokens = min(max_tokens, 8192)
