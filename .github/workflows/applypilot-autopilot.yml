@@ -1,0 +1,334 @@
+name: ApplyPilot Autopilot
+
+on:
+  workflow_dispatch:
+    inputs:
+      application_limit:
+        description: "Maximum applications for this run"
+        required: false
+        default: "5"
+      min_score:
+        description: "Minimum AI job-fit score"
+        required: false
+        default: "8"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: applypilot-autopilot
+  cancel-in-progress: false
+
+jobs:
+  autopilot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    env:
+      # ApplyPilot's own LLM layer
+      LLM_URL: https://openrouter.ai/api/v1
+      LLM_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      LLM_MODEL: openrouter/free
+      LLM_MODEL_QUALITY: openrouter/free
+
+      # Claude Code through OpenRouter
+      ANTHROPIC_BASE_URL: https://openrouter.ai/api
+      ANTHROPIC_AUTH_TOKEN: ${{ secrets.OPENROUTER_API_KEY }}
+      ANTHROPIC_API_KEY: ""
+
+      # Keep Claude Code on Anthropic models for compatibility
+      ANTHROPIC_DEFAULT_SONNET_MODEL: "~anthropic/claude-sonnet-latest"
+      ANTHROPIC_DEFAULT_HAIKU_MODEL: "~anthropic/claude-haiku-latest"
+      ANTHROPIC_DEFAULT_OPUS_MODEL: "~anthropic/claude-opus-latest"
+
+      # ApplyPilot
+      APPLYPILOT_DIR: ${{ runner.temp }}/.applypilot
+
+    steps:
+      # ------------------------------------------------------------
+      # 1. Checkout repository
+      # ------------------------------------------------------------
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      # ------------------------------------------------------------
+      # 2. Python
+      # ------------------------------------------------------------
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # ------------------------------------------------------------
+      # 3. Node.js
+      # ------------------------------------------------------------
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+
+      # ------------------------------------------------------------
+      # 4. Install ApplyPilot
+      # ------------------------------------------------------------
+      - name: Install ApplyPilot
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+
+      # ------------------------------------------------------------
+      # 5. Install Chrome for Testing
+      # ApplyPilot specifically prefers CfT on Linux because its
+      # browser extension requires --load-extension.
+      # ------------------------------------------------------------
+      - name: Install Chrome for Testing
+        run: |
+          python scripts/install_cft.py
+
+      # ------------------------------------------------------------
+      # 6. Install Claude Code
+      # ------------------------------------------------------------
+      - name: Install Claude Code
+        run: |
+          curl -fsSL https://claude.ai/install.sh | bash
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          echo "$HOME/.claude/bin" >> "$GITHUB_PATH"
+
+      # ------------------------------------------------------------
+      # 7. Verify runtime
+      # ------------------------------------------------------------
+      - name: Verify runtime
+        run: |
+          echo "Python:"
+          python --version
+
+          echo "Node:"
+          node --version
+
+          echo "npm:"
+          npm --version
+
+          echo "Claude:"
+          which claude
+          claude --version
+
+          echo "Chrome:"
+          "$HOME/.applypilot/chrome-for-testing/chrome-linux64/chrome" \
+            --version
+
+      # ------------------------------------------------------------
+      # 8. Create ApplyPilot directory
+      # ------------------------------------------------------------
+      - name: Create ApplyPilot directory
+        run: |
+          mkdir -p "$APPLYPILOT_DIR"
+
+      # ------------------------------------------------------------
+      # 9. Restore personal profile
+      # ------------------------------------------------------------
+      - name: Create profile
+        env:
+          PROFILE_JSON: ${{ secrets.PROFILE_JSON }}
+        run: |
+          printf '%s' "$PROFILE_JSON" \
+            > "$APPLYPILOT_DIR/profile.json"
+
+      # ------------------------------------------------------------
+      # 10. Restore resume
+      # ------------------------------------------------------------
+      - name: Create resume
+        env:
+          RESUME_TXT: ${{ secrets.RESUME_TXT }}
+        run: |
+          printf '%s' "$RESUME_TXT" \
+            > "$APPLYPILOT_DIR/resume.txt"
+
+      # ------------------------------------------------------------
+      # 11. Create remote-focused search configuration
+      # ------------------------------------------------------------
+      - name: Create search configuration
+        run: |
+          cat > "$APPLYPILOT_DIR/searches.yaml" <<'YAML'
+          queries:
+            - query: "full stack developer"
+              tier: 1
+            - query: "full stack engineer"
+              tier: 1
+            - query: "software engineer"
+              tier: 1
+            - query: "AI engineer"
+              tier: 1
+            - query: "AI application developer"
+              tier: 1
+            - query: "automation engineer"
+              tier: 1
+            - query: "Python developer"
+              tier: 2
+            - query: "Python engineer"
+              tier: 2
+            - query: "backend developer"
+              tier: 2
+            - query: "backend engineer"
+              tier: 2
+            - query: "software developer"
+              tier: 2
+            - query: "automation developer"
+              tier: 2
+            - query: "LLM engineer"
+              tier: 2
+            - query: "AI developer"
+              tier: 2
+            - query: "product engineer"
+              tier: 2
+            - query: "integration engineer"
+              tier: 3
+            - query: "API developer"
+              tier: 3
+            - query: "technical developer"
+              tier: 3
+
+          locations:
+            - location: "Remote"
+              remote: true
+
+          location:
+            accept_patterns:
+              - "Remote"
+              - "Worldwide"
+              - "Anywhere"
+              - "Global"
+              - "United States"
+              - "USA"
+              - "US"
+              - "Canada"
+              - "Europe"
+              - "European Union"
+              - "EMEA"
+              - "APAC"
+              - "Asia"
+              - "Pakistan"
+              - "International"
+              - "Work from anywhere"
+
+            reject_patterns:
+              - "onsite only"
+              - "on-site only"
+              - "New York only"
+              - "Seattle only"
+              - "San Francisco only"
+              - "London only"
+              - "India only"
+              - "Philippines only"
+
+          country: "USA"
+
+          boards:
+            - indeed
+            - linkedin
+            - zip_recruiter
+
+          defaults:
+            results_per_site: 50
+            hours_old: 72
+
+          exclude_titles:
+            - "senior director"
+            - "director"
+            - "VP"
+            - "vice president"
+            - "chief"
+            - "principal"
+            - "staff engineer"
+            - "intern"
+            - "internship"
+            - "co-op"
+            - "clearance required"
+            - "TS/SCI"
+            - "security clearance"
+          YAML
+
+      # ------------------------------------------------------------
+      # 12. Verify secrets/config without printing sensitive values
+      # ------------------------------------------------------------
+      - name: Verify configuration
+        run: |
+          test -s "$APPLYPILOT_DIR/profile.json"
+          test -s "$APPLYPILOT_DIR/resume.txt"
+          test -s "$APPLYPILOT_DIR/searches.yaml"
+
+          echo "Profile: OK"
+          echo "Resume: OK"
+          echo "Search configuration: OK"
+          echo "OpenRouter authentication: configured"
+
+      # ------------------------------------------------------------
+      # 13. Discover jobs
+      # ------------------------------------------------------------
+      - name: Discover jobs
+        run: |
+          applypilot run discover \
+            --workers 2 \
+            --max-age-days 3
+
+      # ------------------------------------------------------------
+      # 14. Enrich + score + tailor + cover letter
+      # ------------------------------------------------------------
+      - name: Prepare applications
+        run: |
+          applypilot run enrich score tailor cover \
+            --workers 2 \
+            --min-score "${{ inputs.min_score }}" \
+            --max-age-days 14
+
+      # ------------------------------------------------------------
+      # 15. Show status before applying
+      # ------------------------------------------------------------
+      - name: Pre-application status
+        run: |
+          applypilot status
+
+      # ------------------------------------------------------------
+      # 16. Auto-apply
+      #
+      # Headless:
+      #   GitHub runner has no desktop.
+      #
+      # no-hitl:
+      #   CAPTCHA/login/unusual forms are parked instead of blocking
+      #   the whole run.
+      # ------------------------------------------------------------
+      - name: Auto-apply
+        run: |
+          applypilot apply \
+            --workers 2 \
+            --limit "${{ inputs.application_limit }}" \
+            --min-score "${{ inputs.min_score }}" \
+            --max-age-days 14 \
+            --model sonnet \
+            --headless \
+            --no-hitl \
+            --no-focus
+
+      # ------------------------------------------------------------
+      # 17. Final status
+      # ------------------------------------------------------------
+      - name: Final status
+        if: always()
+        run: |
+          applypilot status || true
+
+      # ------------------------------------------------------------
+      # 18. Save application state/logs
+      # ------------------------------------------------------------
+      - name: Upload ApplyPilot results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: applypilot-results-${{ github.run_number }}
+          path: |
+            ${{ env.APPLYPILOT_DIR }}/applypilot.db
+            ${{ env.APPLYPILOT_DIR }}/tailored_resumes/
+            ${{ env.APPLYPILOT_DIR }}/cover_letters/
+            ${{ env.APPLYPILOT_DIR }}/logs/
+            ${{ env.APPLYPILOT_DIR }}/tracking/
+          if-no-files-found: warn
+          retention-days: 14
