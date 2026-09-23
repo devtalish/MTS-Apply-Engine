@@ -7,11 +7,19 @@ permissions:
   contents: read
 
 jobs:
-  test:
+  runtime-test:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      LLM_URL: https://openrouter.ai/api/v1
+      LLM_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      LLM_MODEL: openrouter/free
+      LLM_MODEL_QUALITY: openrouter/free
+      APPLYPILOT_DIR: ${{ runner.temp }}/.applypilot
 
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Setup Python
@@ -19,16 +27,65 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Setup Node
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "22"
 
-      - name: Verify
+      - name: Install ApplyPilot
         run: |
-          echo "GitHub Actions started successfully."
-          python --version
-          node --version
-          npm --version
-          echo "Repository: $GITHUB_REPOSITORY"
-          echo "Branch: $GITHUB_REF_NAME"
+          python -m pip install --upgrade pip
+          python -m pip install -e .
+
+      - name: Create ApplyPilot directory
+        run: |
+          mkdir -p "$APPLYPILOT_DIR"
+
+      - name: Create profile
+        env:
+          PROFILE_JSON: ${{ secrets.PROFILE_JSON }}
+        run: |
+          printf '%s' "$PROFILE_JSON" > "$APPLYPILOT_DIR/profile.json"
+
+      - name: Create resume
+        env:
+          RESUME_TXT: ${{ secrets.RESUME_TXT }}
+        run: |
+          printf '%s' "$RESUME_TXT" > "$APPLYPILOT_DIR/resume.txt"
+
+      - name: Create environment
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: |
+          {
+            echo "LLM_URL=https://openrouter.ai/api/v1"
+            echo "LLM_API_KEY=$OPENROUTER_API_KEY"
+            echo "LLM_MODEL=openrouter/free"
+            echo "LLM_MODEL_QUALITY=openrouter/free"
+          } > "$APPLYPILOT_DIR/.env"
+
+      - name: Verify ApplyPilot CLI
+        run: |
+          applypilot --help
+
+      - name: Verify apply command
+        run: |
+          applypilot apply --help
+
+      - name: Verify pipeline command
+        run: |
+          applypilot run --help
+
+      - name: Verify configuration
+        run: |
+          test -s "$APPLYPILOT_DIR/profile.json"
+          test -s "$APPLYPILOT_DIR/resume.txt"
+          test -s "$APPLYPILOT_DIR/.env"
+
+          echo "PROFILE_JSON: present"
+          echo "RESUME_TXT: present"
+          echo "LLM configuration: present"
+
+      - name: Show status
+        run: |
+          applypilot status || true
