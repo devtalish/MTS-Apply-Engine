@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       execute_apply:
-        description: "Run browser auto-apply for eligible jobs (requires ANTHROPIC_API_KEY)."
+        description: "Run browser auto-apply for eligible jobs using Claude Code through OpenRouter."
         required: false
         default: false
         type: boolean
@@ -25,9 +25,16 @@ jobs:
     timeout-minutes: 45
     env:
       APPLYPILOT_DIR: ${{ runner.temp }}/applypilot
-      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      OPENROUTER_KEY: ${{ secrets.OPENROUTER_KEY }}
+      DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_KEY }}
+      GROQ_API_KEY: ${{ secrets.GROQ_KEY }}
+      LLM_URL: https://openrouter.ai/api/v1
+      LLM_API_KEY: ${{ secrets.OPENROUTER_KEY }}
+      ANTHROPIC_BASE_URL: https://openrouter.ai/api
+      ANTHROPIC_AUTH_TOKEN: ${{ secrets.OPENROUTER_KEY }}
+      ANTHROPIC_API_KEY: ""
+      ANTHROPIC_DEFAULT_SONNET_MODEL: "~anthropic/claude-sonnet-latest"
+      ANTHROPIC_DEFAULT_HAIKU_MODEL: "~anthropic/claude-haiku-latest"
       STATE_KEY: ${{ secrets.APPLYPILOT_STATE_KEY }}
       EXECUTE_APPLY: ${{ github.event_name == 'workflow_dispatch' && inputs.execute_apply || false }}
 
@@ -100,7 +107,7 @@ jobs:
           claude --version
 
       - name: Auto-apply eligible jobs
-        if: env.EXECUTE_APPLY == 'true' && env.ANTHROPIC_API_KEY != ''
+        if: env.EXECUTE_APPLY == 'true' && env.OPENROUTER_KEY != ''
         run: |
           set -euo pipefail
           applypilot apply             --workers 2             --limit 5             --min-score 8             --max-age-days 14             --no-hitl             --no-focus             --headless
@@ -117,7 +124,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/state-save"
-          tar -czf "$RUNNER_TEMP/state-save/state.tar.gz"             -C "$APPLYPILOT_DIR"             applypilot.db tailored_resumes cover_letters tracking interview_packets company_limits.yaml qa.json 2>/dev/null || true
+          tar -czf "$RUNNER_TEMP/state-save/state.tar.gz"             -C "$APPLYPILOT_DIR"             applypilot.db tailored_resumes cover_letters tracking interview_packets chrome-sessions extension_key.b64 company_limits.yaml qa.json 2>/dev/null || true
           openssl enc -aes-256-cbc -pbkdf2 -iter 200000             -pass env:STATE_KEY             -in "$RUNNER_TEMP/state-save/state.tar.gz"             -out "$RUNNER_TEMP/state-save/talish-state.enc"
 
       - name: Upload encrypted state
