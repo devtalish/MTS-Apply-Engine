@@ -56,7 +56,7 @@ Never invent facts.
 _INELIGIBLE_TITLE_PATTERNS = re.compile(
     r"\b(?:senior|staff|principal|lead|head|director|vice president|vp|chief|cto)\b"
     r"|\bintern(?:ship)?\b|\bco-op\b|\bgraduate\b|\btrainee\b|\bapprentice\b"
-    r"|\bfresher\b|\bnew[- ]grad\b|\bentry[- ]level\b"
+    r"|\bfresher\b|\bnew[- ]grad\b"
     r"|\brecruit(?:er|ing)\b|\btalent acquisition\b|\btalent sourc(?:er|ing)\b"
     r"|\baccount executive\b|\baccount manager\b|\bsales engineer\b"
     r"|\bpre[- ]?sales\b|\bcustomer success\b|\bcustomer support\b"
@@ -66,7 +66,7 @@ _INELIGIBLE_TITLE_PATTERNS = re.compile(
     r"|\bcommission[- ]only\b", re.I)
 
 _INELIGIBLE_LOCATION_PATTERNS = re.compile(
-    r"\b(?:EMEA|APAC|Europe|EU|Germany|Netherlands|France|Spain|Italy|Poland|Ukraine|Portugal|"
+    r"\b(?:EMEA|APAC|Europe|EU|Canada|Germany|Netherlands|France|Spain|Italy|Poland|Ukraine|Portugal|"
     r"Ireland|Denmark|Sweden|Norway|Finland|Belgium|Switzerland|Austria|Romania|Hungary|Croatia|"
     r"Greece|Bulgaria|Serbia|Slovakia|Slovenia|Estonia|Latvia|Lithuania|India|Singapore|Japan|"
     r"Vietnam|Thailand|Philippines|Indonesia|Korea|Taiwan|Hong Kong|China|Bangladesh|Malaysia|"
