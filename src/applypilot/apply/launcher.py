@@ -32,6 +32,7 @@ from applypilot.database import (
     get_in_flight_by_company,
     transition_state,
 )
+from applypilot.job_policy import hard_gate
 from applypilot.apply import prompt as prompt_mod
 from applypilot.apply.chrome import (  # noqa: F401  (re-exports)
     launch_chrome, cleanup_worker, kill_all_chrome,
@@ -1511,6 +1512,12 @@ def acquire_job(target_url: str | None = None,
                 LIMIT 1
             """, (target_url, target_url, like, like,
                   target_url, target_url)).fetchone()
+            # Explicitly selected URLs still pass the same hard policy gate.
+            if row is not None:
+                decision = hard_gate(dict(row))
+                if not decision.eligible:
+                    logger.info("Target job rejected by hard policy: %s", decision.reason)
+                    row = None
         else:
             blocked_sites, blocked_patterns = _load_blocked()
             site_filter = " AND ".join(f"site != '{s}'" for s in blocked_sites) if blocked_sites else "1=1"
@@ -1584,6 +1591,25 @@ def acquire_job(target_url: str | None = None,
                 ORDER BY j.fit_score DESC, j.discovered_at DESC, j.url
                 LIMIT 100
             """, (min_score, *company_excl_params, *age_params)).fetchall()
+
+            # Apply deterministic policy gates before any scoring-based selection.
+            # This gate is intentionally repeated at apply-time because a job can
+            # be stale, manually inserted, or changed after scoring.
+            policy_candidates = []
+            for candidate in candidates:
+                decision = hard_gate(dict(candidate))
+                if decision.eligible:
+                    policy_candidates.append(candidate)
+                else:
+                    logger.info("Skipping policy-ineligible job %s: %s", candidate["url"][:80], decision.reason)
+                    try:
+                        transition_state(
+                            conn, candidate["url"], "archived",
+                            reason=f"hard policy: {decision.reason}", force=True,
+                        )
+                    except Exception:
+                        logger.debug("Could not archive policy-ineligible job", exc_info=True)
+            candidates = policy_candidates
 
             # Build in-flight buckets once, reuse for every candidate.
             # Use resolve_company_key so Greenhouse/Workday jobs (NULL company,
