@@ -1,23 +1,46 @@
-name: ApplyPilot Autopilot
+name: Talish Cloud Job Engine
 
 on:
+  schedule:
+    - cron: "0 */6 * * *"
   workflow_dispatch:
+    inputs:
+      execute_apply:
+        description: "Run browser auto-apply for eligible jobs (requires ANTHROPIC_API_KEY)."
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: talish-job-engine
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: read
 
 jobs:
-  test:
+  engine:
     runs-on: ubuntu-latest
-
+    timeout-minutes: 45
+    env:
+      APPLYPILOT_DIR: ${{ runner.temp }}/applypilot
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      STATE_KEY: ${{ secrets.APPLYPILOT_STATE_KEY }}
+      EXECUTE_APPLY: ${{ github.event_name == 'workflow_dispatch' && inputs.execute_apply || false }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: "22"
 
@@ -25,24 +48,97 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -e .
+          python -m pip install cryptography
 
-      - name: Check ApplyPilot
-        run: |
-          applypilot --help
-          applypilot apply --help
-
-      - name: Check configuration
+      - name: Prepare private runtime state
         env:
           PROFILE_JSON: ${{ secrets.PROFILE_JSON }}
           RESUME_TXT: ${{ secrets.RESUME_TXT }}
+          SEARCHES_YAML: ${{ secrets.SEARCHES_YAML }}
         run: |
-          mkdir -p "$HOME/.applypilot"
+          set -euo pipefail
+          mkdir -p "$APPLYPILOT_DIR"
+          test -n "$PROFILE_JSON" || { echo "Missing PROFILE_JSON"; exit 1; }
+          test -n "$RESUME_TXT" || { echo "Missing RESUME_TXT"; exit 1; }
+          printf '%s' "$PROFILE_JSON" > "$APPLYPILOT_DIR/profile.json"
+          printf '%s' "$RESUME_TXT" > "$APPLYPILOT_DIR/resume.txt"
+          if [ -n "$SEARCHES_YAML" ]; then
+            printf '%s' "$SEARCHES_YAML" > "$APPLYPILOT_DIR/searches.yaml"
+          fi
 
-          printf '%s' "$PROFILE_JSON" > "$HOME/.applypilot/profile.json"
-          printf '%s' "$RESUME_TXT" > "$HOME/.applypilot/resume.txt"
+      - name: Restore encrypted state
+        if: env.STATE_KEY != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python scripts/cloud_state.py restore \
+            --state-dir "$APPLYPILOT_DIR" \
+            --key "$STATE_KEY" \
+            --repo "$GITHUB_REPOSITORY" \
+            --token "$GH_TOKEN"
 
-          test -s "$HOME/.applypilot/profile.json"
-          test -s "$HOME/.applypilot/resume.txt"
+      - name: Run discovery, scoring and tailoring
+        run: |
+          set -euo pipefail
+          applypilot run all \
+            --workers 2 \
+            --min-score 8 \
+            --max-age-days 14 \
+            --limit 20
 
-          echo "Profile loaded."
-          echo "Resume loaded."
+      - name: Install browser runtime
+        if: env.EXECUTE_APPLY == 'true'
+        run: |
+          set -euo pipefail
+          npx playwright install --with-deps chromium
+          npm install -g @anthropic-ai/claude-code
+          claude --version
+
+      - name: Auto-apply eligible jobs
+        if: env.EXECUTE_APPLY == 'true' && env.ANTHROPIC_API_KEY != ''
+        run: |
+          set -euo pipefail
+          applypilot apply \
+            --workers 2 \
+            --limit 5 \
+            --min-score 8 \
+            --max-age-days 14 \
+            --no-hitl \
+            --no-focus \
+            --headless
+
+      - name: Track responses and prepare interviews
+        run: |
+          set -euo pipefail
+          applypilot track --days 30 || true
+          applypilot interview-prep --limit 10 || true
+          applypilot status || true
+
+      - name: Save encrypted private state
+        if: always() && env.STATE_KEY != ''
+        run: |
+          set -euo pipefail
+          python scripts/cloud_state.py save \
+            --state-dir "$APPLYPILOT_DIR" \
+            --key "$STATE_KEY" \
+            --output "$RUNNER_TEMP/talish-state.enc"
+
+      - name: Upload encrypted state
+        if: always() && env.STATE_KEY != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: talish-state-${{ github.run_id }}
+          path: ${{ runner.temp }}/talish-state.enc
+          retention-days: 90
+
+      - name: Upload non-sensitive run report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: talish-run-report-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/applypilot/logs/**
+            ${{ runner.temp }}/applypilot/interview_packets/**
+          if-no-files-found: ignore
+          retention-days: 7
