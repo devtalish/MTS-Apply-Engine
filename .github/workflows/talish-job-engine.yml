@@ -39,7 +39,7 @@ jobs:
           cache: pip
 
       - name: Restore engine state
-        uses: actions/cache/restore@v4
+        uses: actions/cache@v4
         with:
           path: |
             ${{ runner.temp }}/.applypilot/applypilot.db
@@ -47,7 +47,7 @@ jobs:
             ${{ runner.temp }}/.applypilot/cover_letters
             ${{ runner.temp }}/.applypilot/tracking
             ${{ runner.temp }}/.applypilot/logs
-          key: talish-engine-${{ runner.os }}-${{ github.ref_name }}-${{ github.run_id }}
+          key: talish-engine-${{ runner.os }}-${{ github.ref_name }}
           restore-keys: |
             talish-engine-${{ runner.os }}-${{ github.ref_name }}-
             talish-engine-${{ runner.os }}-main-
@@ -78,13 +78,3 @@ jobs:
         run: |
           applypilot status
 
-      - name: Save engine state
-        uses: actions/cache/save@v4
-        with:
-          path: |
-            ${{ runner.temp }}/.applypilot/applypilot.db
-            ${{ runner.temp }}/.applypilot/tailored_resumes
-            ${{ runner.temp }}/.applypilot/cover_letters
-            ${{ runner.temp }}/.applypilot/tracking
-            ${{ runner.temp }}/.applypilot/logs
-          key: talish-engine-${{ runner.os }}-${{ github.ref_name }}-${{ github.run_id }}
