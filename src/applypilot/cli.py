@@ -659,6 +659,21 @@ def track(
 
 
 @app.command()
+def interview_prep(
+    limit: int = typer.Option(10, "--limit", "-l", help="Maximum interview packets to generate."),
+) -> None:
+    """Generate evidence-grounded preparation packets for interview-stage jobs."""
+    _bootstrap()
+    from applypilot.interview_prep import generate_packets
+    paths = generate_packets(limit=limit)
+    if not paths:
+        console.print("[dim]No jobs currently marked as interview stage.[/dim]")
+        return
+    for path in paths:
+        console.print(f"[green]Interview packet:[/green] {path}")
+
+
+@app.command()
 def dashboard() -> None:
     """Generate and open the HTML dashboard in your browser."""
     _bootstrap()
