@@ -190,8 +190,8 @@ def load_base_urls() -> dict[str, str | None]:
 
 DEFAULTS = {
     "min_score": 8,
-    "max_job_age_days": 7,
-    "max_in_flight_per_company": 2,
+    "max_job_age_days": 14,
+    "max_in_flight_per_company": 3,
     "in_flight_window_days": 30,
     "max_tailored_per_company": 5,
     "max_apply_attempts": 3,
