@@ -32,7 +32,7 @@ class PolicyDecision:
 _HARD_TITLE = re.compile(
     r"\b(?:senior|staff|principal|lead|head|director|vice president|vp|chief|cto)\b"
     r"|\bintern(?:ship)?\b|\bco-op\b|\bgraduate\b|\btrainee\b|\bapprentice\b"
-    r"|\bfresher\b|\bnew[- ]grad\b|\bentry[- ]level\b"
+    r"|\bfresher\b|\bnew[- ]grad\b"
     r"|\brecruit(?:er|ing)\b|\btalent acquisition\b|\btalent sourc(?:er|ing)\b"
     r"|\baccount executive\b|\baccount manager\b|\bsales engineer\b"
     r"|\bpre[- ]?sales\b|\bcustomer success\b|\bcustomer support\b"
@@ -50,7 +50,7 @@ _GEO_REJECT = re.compile(
     r"|\bonly\b.*\b(?:us|usa|united states|canada|uk|united kingdom|"
     r"europe|eu|india|germany|france|spain|italy|ireland|netherlands|"
     r"australia|new zealand|singapore|japan|brazil|mexico)\b"
-    r"|\bremote\s*\(?(?:us|usa|united states|canada|uk|united kingdom|"
+    r"|\bremote\s*[—\-]\s*(?:us|usa|united states|canada|uk|united kingdom|europe|eu|india)\b"\n    r"|\bremote\s*\(?(?:us|usa|united states|canada|uk|united kingdom|
     r"europe|eu|india)\)?\b",
     re.I,
 )
