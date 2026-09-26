@@ -70,7 +70,8 @@ def _build_fallback_chain(
     gemini_key = os.environ.get("GEMINI_API_KEY", "")
     openai_key = os.environ.get("OPENAI_API_KEY", "")
     anthropic_key = os.environ.get("ANTHROPIC_API_KEY", "")
-    deepseek_key = os.environ.get("DEEPSEEK_API_KEY", "")
+    deepseek_key = os.environ.get("DEEPSEEK_API_KEY", "") or os.environ.get("DEEPSEEK_KEY", "")
+    groq_key = os.environ.get("GROQ_API_KEY", "") or os.environ.get("GROQ_KEY", "")
 
     # Generic OpenAI-compatible provider.
     #
@@ -78,6 +79,9 @@ def _build_fallback_chain(
     # https://openrouter.ai/api/v1
     local_url = os.environ.get("LLM_URL", "").rstrip("/")
     local_key = os.environ.get("LLM_API_KEY", "")
+    if not local_url and os.environ.get("OPENROUTER_KEY"):
+        local_url = "https://openrouter.ai/api/v1"
+        local_key = os.environ.get("OPENROUTER_KEY", "")
 
     # Provider endpoints
     gemini_url = (
@@ -86,6 +90,7 @@ def _build_fallback_chain(
     openai_url = "https://api.openai.com/v1"
     anthropic_url = "https://api.anthropic.com"
     deepseek_url = "https://api.deepseek.com/v1"
+    groq_url = "https://api.groq.com/openai/v1"
 
     chain: list[ModelEntry] = []
 
@@ -177,6 +182,10 @@ def _build_fallback_chain(
                 deepseek_key,
             )
         )
+
+    if groq_key:
+        for model in ("llama-3.3-70b-versatile", "qwen/qwen3-32b"):
+            chain.append(ModelEntry(model, "groq", groq_url, groq_key))
 
     # ------------------------------------------------------------------
     # 5. Anthropic fallback
