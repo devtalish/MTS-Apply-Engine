@@ -1,52 +1,42 @@
-# ApplyPilot search configuration for Muhammad Talish
-# Target: legitimate remote software / AI / automation work compatible with Pakistan.
+# Remote-first search configuration for Muhammad Talish.
+# Primary target: legitimate technical recurring work, 5-14 hours/week.
+# Secondary target: flexible work up to 20 hours/week.
+# Full-time 30-40 hour roles are intentionally excluded downstream.
 
 queries:
-  - query: "software engineer"
+  - query: "part time software developer"
     tier: 1
-  - query: "backend engineer"
+  - query: "part time full stack developer"
     tier: 1
-  - query: "full stack engineer"
+  - query: "part time backend developer"
     tier: 1
-  - query: "full stack developer"
+  - query: "part time Python developer"
     tier: 1
-  - query: "python developer"
+  - query: "part time AI engineer"
     tier: 1
-  - query: "python engineer"
+  - query: "part time automation engineer"
     tier: 1
-  - query: "AI engineer"
+  - query: "part time API integration developer"
     tier: 1
-  - query: "AI automation engineer"
+  - query: "contract software developer"
     tier: 1
-  - query: "automation engineer"
+  - query: "async software engineer"
     tier: 1
-  - query: "backend developer"
+  - query: "flexible software developer"
+    tier: 1
+  - query: "freelance software developer"
     tier: 2
-  - query: "software developer"
+  - query: "contract Python developer"
     tier: 2
-  - query: "API engineer"
+  - query: "contract full stack developer"
     tier: 2
-  - query: "integration engineer"
+  - query: "AI automation developer"
     tier: 2
-  - query: "platform engineer"
-    tier: 2
-  - query: "DevOps engineer"
-    tier: 2
-  - query: "cloud engineer"
+  - query: "technical implementation engineer"
     tier: 2
   - query: "QA automation engineer"
     tier: 2
-  - query: "applied AI engineer"
-    tier: 2
-  - query: "AI developer"
-    tier: 2
-  - query: "technical developer"
-    tier: 3
-  - query: "implementation engineer"
-    tier: 3
 
-# Search remote listings. Location filtering is finalized by the scorer using
-# the actual job description, with Pakistan as the candidate's base country.
 locations:
   - location: "Remote"
     remote: true
@@ -69,17 +59,13 @@ location:
     - "India only"
     - "onsite only"
 
-# Indeed's country parameter is used only where Indeed is actually queried.
-# Remote searches may skip Indeed automatically because JobSpy/Indeed can
-# infer country from the network IP.
 country: "WORLDWIDE"
 country_indeed: "worldwide"
 
+# Discovery boards are sources, not application endpoints.
 boards:
   - linkedin
   - indeed
-  - glassdoor
-  - google
 
 defaults:
   results_per_site: 75
@@ -87,15 +73,18 @@ defaults:
   country_indeed: "worldwide"
 
 exclude_titles:
-  - "senior director"
+  - "senior"
+  - "staff"
+  - "principal"
+  - "lead"
+  - "head"
+  - "director"
   - "vice president"
   - "chief"
+  - "cto"
   - "intern"
   - "internship"
   - "co-op"
-  - "clearance required"
-  - "TS/SCI"
-  - "principal scientist"
   - "commission only"
   - "commission-only"
   - "unpaid"
