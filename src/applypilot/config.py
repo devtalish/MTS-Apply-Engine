@@ -241,7 +241,7 @@ def get_tier() -> int:
     """
     load_env()
 
-    has_llm = any(os.environ.get(k) for k in ("GEMINI_API_KEY", "OPENAI_API_KEY", "LLM_URL"))
+    has_llm = any(os.environ.get(k) for k in ("GEMINI_API_KEY", "OPENAI_API_KEY", "LLM_URL", "OPENROUTER_KEY", "LLM_API_KEY", "DEEPSEEK_API_KEY", "DEEPSEEK_KEY", "GROQ_API_KEY", "GROQ_KEY"))
     if not has_llm:
         return 1
 
