@@ -51,7 +51,7 @@ _GEO_REJECT = re.compile(
     r"europe|eu|india|germany|france|spain|italy|ireland|netherlands|"
     r"australia|new zealand|singapore|japan|brazil|mexico)\b"
     r"|\bremote\s*[—\-]\s*(?:us|usa|united states|canada|uk|united kingdom|europe|eu|india)\b"
-    r"|\bremote\s*\(?(?:us|usa|united states|canada|uk|united kingdom|
+    r"|\bremote\s*\(?(?:us|usa|united states|canada|uk|united kingdom|"
     r"europe|eu|india)\)?\b",
     re.I,
 )
