@@ -102,6 +102,7 @@ jobs:
       - name: Run discovery, scoring and tailoring
         run: |
           set -euo pipefail
+          export APPLY_PILOT_WORKDAY_MAX_RESULTS=5
           applypilot run all             --workers 3             --min-score 8             --max-age-days 14             --limit 20
 
       - name: Install browser runtime
