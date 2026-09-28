@@ -7,6 +7,7 @@ Search queries, locations, and filtering rules are loaded from the user's
 search configuration YAML (searches.yaml) rather than being hardcoded.
 """
 
+import inspect
 import logging
 import sqlite3
 import time
@@ -92,6 +93,24 @@ def parse_proxy(proxy_str: str) -> dict:
 
 
 # -- Retry wrapper -----------------------------------------------------------
+
+def _scrape_jobs_compat(kwargs: dict):
+    """Call JobSpy across API versions without failing on unsupported kwargs.
+
+    Some runner environments can resolve a JobSpy build whose scrape_jobs()
+    signature does not expose hours_old even though newer JobSpy versions do.
+    We remove only unsupported optional arguments and keep the search alive.
+    """
+    try:
+        params = inspect.signature(scrape_jobs).parameters
+        unsupported = [key for key in kwargs if key not in params]
+        if unsupported:
+            log.warning("JobSpy compatibility: dropping unsupported parameters: %s", ", ".join(unsupported))
+            kwargs = {key: value for key, value in kwargs.items() if key in params}
+    except (TypeError, ValueError):
+        pass
+    return _scrape_jobs_compat(kwargs)
+
 
 def _scrape_with_retry(kwargs: dict, max_retries: int = 2, backoff: float = 5.0):
     """Call scrape_jobs with retry on transient failures."""
@@ -400,7 +419,7 @@ def search_jobs(
         kwargs["linkedin_fetch_description"] = True
 
     try:
-        df = scrape_jobs(**kwargs)
+        df = _scrape_jobs_compat(kwargs)
     except Exception as e:
         log.error("JobSpy search failed: %s", e)
         return {"error": str(e), "total": 0, "new": 0, "existing": 0}
