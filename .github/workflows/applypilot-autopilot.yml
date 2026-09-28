@@ -93,10 +93,16 @@ jobs:
           tar -xzf "$RUNNER_TEMP/state-restore/state.tar.gz" -C "$APPLYPILOT_DIR"
           echo "Previous encrypted state restored."
 
+      - name: Validate required runtime secrets
+        run: |
+          set -euo pipefail
+          test -n "$OPENROUTER_KEY" || { echo "Missing OPENROUTER_KEY repository secret"; exit 1; }
+          test -n "$PROFILE_JSON" || true
+
       - name: Run discovery, scoring and tailoring
         run: |
           set -euo pipefail
-          applypilot run all             --workers 2             --min-score 8             --max-age-days 14             --limit 20
+          applypilot run all             --workers 3             --min-score 8             --max-age-days 14             --limit 20
 
       - name: Install browser runtime
         if: env.EXECUTE_APPLY == 'true'
