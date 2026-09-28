@@ -9,6 +9,7 @@ hardcoded. Supports sequential search + detail fetching with proxy.
 
 import json
 import logging
+import os
 import re
 import sqlite3
 import time
@@ -551,7 +552,10 @@ def run_workday_discovery(employers: dict | None = None, workers: int = 1) -> di
         setup_proxy(proxy)
 
     location_filter = search_cfg.get("workday_location_filter", True)
-    max_results = int(search_cfg.get("workday_max_results_per_employer", 20))
+    max_results = int(os.environ.get(
+        "APPLY_PILOT_WORKDAY_MAX_RESULTS",
+        search_cfg.get("workday_max_results_per_employer", 5),
+    ))
 
     log.info("Workday crawl: %d queries x %d employers (workers=%d, max %d details/employer/query)",
              len(queries), len(employers), workers, max_results)
