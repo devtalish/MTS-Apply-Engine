@@ -459,6 +459,7 @@ def scrape_employers(
                 pool.submit(
                     _process_one, key, employers, search_text,
                     location_filter, accept_locs, reject_locs,
+                    max_results=max_results,
                 ): key
                 for key in valid_keys
             }
@@ -482,6 +483,7 @@ def scrape_employers(
             result = _process_one(
                 key, employers, search_text,
                 location_filter, accept_locs, reject_locs,
+                max_results=max_results,
             )
             completed += 1
             total_new += result["new"]
@@ -529,8 +531,9 @@ def run_workday_discovery(employers: dict | None = None, workers: int = 1) -> di
     queries_cfg = search_cfg.get("queries", [])
     accept_locs, reject_locs = _load_location_filter(search_cfg)
 
-    # Default to tier 1-2 queries for workday scraping
-    max_tier = search_cfg.get("workday_max_tier", 2)
+    # Workday detail pages are expensive; tier 1 is enough for the primary
+    # search pass. A later targeted pass can use tier 2 if needed.
+    max_tier = search_cfg.get("workday_max_tier", 1)
     queries = [q["query"] for q in queries_cfg if q.get("tier", 99) <= max_tier]
 
     if not queries:
@@ -546,8 +549,10 @@ def run_workday_discovery(employers: dict | None = None, workers: int = 1) -> di
         setup_proxy(proxy)
 
     location_filter = search_cfg.get("workday_location_filter", True)
+    max_results = int(search_cfg.get("workday_max_results_per_employer", 20))
 
-    log.info("Workday crawl: %d queries x %d employers (workers=%d)", len(queries), len(employers), workers)
+    log.info("Workday crawl: %d queries x %d employers (workers=%d, max %d details/employer/query)",
+             len(queries), len(employers), workers, max_results)
 
     grand_new = 0
     grand_existing = 0
@@ -561,6 +566,7 @@ def run_workday_discovery(employers: dict | None = None, workers: int = 1) -> di
             location_filter=location_filter,
             accept_locs=accept_locs,
             reject_locs=reject_locs,
+            max_results=max_results,
             workers=workers,
         )
         grand_new += result["new"]
